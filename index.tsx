@@ -303,6 +303,8 @@ const MobileCalendar = () => {
   const [isScheduling, setIsScheduling] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationResult, setNotificationResult] = useState<{ success: boolean; count: number; error?: string } | null>(null);
+  const [showYearlySummary, setShowYearlySummary] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   useEffect(() => {
     const today = new Date();
@@ -319,6 +321,61 @@ const MobileCalendar = () => {
     setNotificationsEnabled(result.success);
     setIsScheduling(false);
     setShowNotificationModal(true);
+  };
+
+  // Get yearly events for summary
+  const yearlyEvents = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const eventsByMonth: Record<number, Array<{date: Date, lunar: any, events: CalendarEvent[]}>> = {};
+    
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31);
+    
+    for(let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+       const lunar = toLunar(d);
+       const evs = getEventsForDate(lunar);
+       if(evs.length > 0) {
+          const month = d.getMonth();
+          if (!eventsByMonth[month]) eventsByMonth[month] = [];
+          eventsByMonth[month].push({
+              date: new Date(d),
+              lunar,
+              events: evs
+          });
+       }
+    }
+    return eventsByMonth;
+  }, [currentDate.getFullYear()]);
+
+  const handleDownloadPDF = () => {
+    const element = document.getElementById('mobile-printable-summary');
+    if (!element) return;
+    
+    setIsGeneratingPDF(true);
+
+    const opt = {
+      margin: 0, 
+      filename: `Calendario_Ritual_${currentDate.getFullYear()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false }, 
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all'] }
+    };
+
+    // @ts-ignore
+    if (window.html2pdf) {
+        // @ts-ignore
+        window.html2pdf().set(opt).from(element).save().then(() => {
+            setIsGeneratingPDF(false);
+        }).catch((err: any) => {
+            console.error("PDF generation failed", err);
+            setIsGeneratingPDF(false);
+            alert("Error al generar el PDF. Por favor intente de nuevo.");
+        });
+    } else {
+        alert('La librería PDF no está cargada. Por favor recargue la página.');
+        setIsGeneratingPDF(false);
+    }
   };
 
   const isToday = (d: Date) => {
@@ -677,18 +734,25 @@ const MobileCalendar = () => {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="bg-white border-t border-gray-200 flex justify-around py-2 safe-area-bottom">
+      <div className="bg-white border-t border-gray-200 grid grid-cols-4 py-2 safe-area-bottom">
         <button 
           onClick={handleToday}
-          className="flex flex-col items-center text-[#B91C1C] px-4 py-1"
+          className="flex flex-col items-center text-[#B91C1C] py-1"
         >
           <CalendarIcon size={20} />
-          <span className="text-xs mt-0.5">Hoy</span>
+          <span className="text-[10px] mt-0.5">Hoy</span>
+        </button>
+        <button 
+          onClick={() => setShowYearlySummary(true)}
+          className="flex flex-col items-center text-[#B91C1C] py-1"
+        >
+          <FileText size={20} />
+          <span className="text-[10px] mt-0.5">Resumen</span>
         </button>
         <button 
           onClick={handleScheduleNotifications}
           disabled={isScheduling}
-          className={`flex flex-col items-center px-4 py-1 ${notificationsEnabled ? 'text-green-600' : 'text-[#B91C1C]'}`}
+          className={`flex flex-col items-center py-1 ${notificationsEnabled ? 'text-green-600' : 'text-[#B91C1C]'}`}
         >
           {isScheduling ? (
             <Loader2 size={20} className="animate-spin" />
@@ -697,14 +761,14 @@ const MobileCalendar = () => {
           ) : (
             <Bell size={20} />
           )}
-          <span className="text-xs mt-0.5">Recordar</span>
+          <span className="text-[10px] mt-0.5">Recordar</span>
         </button>
         <button 
           onClick={() => generateICS(currentDate.getFullYear())}
-          className="flex flex-col items-center text-[#B91C1C] px-4 py-1"
+          className="flex flex-col items-center text-[#B91C1C] py-1"
         >
           <Download size={20} />
-          <span className="text-xs mt-0.5">Exportar</span>
+          <span className="text-[10px] mt-0.5">Exportar</span>
         </button>
       </div>
 
@@ -839,6 +903,94 @@ const MobileCalendar = () => {
             
             {/* Safe area padding */}
             <div className="h-6 safe-area-bottom"></div>
+          </div>
+        </div>
+      )}
+
+      {/* Yearly Summary Modal */}
+      {showYearlySummary && (
+        <div className="fixed inset-0 z-50 bg-white flex flex-col">
+          {/* Header */}
+          <div className="bg-[#B91C1C] text-white px-4 py-3 flex items-center justify-between safe-area-top">
+            <button 
+              onClick={() => setShowYearlySummary(false)}
+              className="text-white font-medium"
+            >
+              Cerrar
+            </button>
+            <h2 className="font-bold text-lg">Resumen {currentDate.getFullYear()}</h2>
+            <button 
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+              className="text-white font-medium flex items-center gap-1"
+            >
+              {isGeneratingPDF ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
+              <span>PDF</span>
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-auto bg-gray-50">
+            {/* Printable Content */}
+            <div id="mobile-printable-summary" className="bg-white min-h-full">
+              {/* Title */}
+              <div className="bg-[#B91C1C] text-white p-4 text-center">
+                <h1 className="text-xl font-bold">Calendario Ritual del Templo</h1>
+                <p className="text-white/80 text-sm mt-1">{currentDate.getFullYear()}</p>
+              </div>
+
+              {/* Events by Month */}
+              <div className="p-4 space-y-4">
+                {Object.entries(yearlyEvents).map(([monthIndex, days]) => (
+                  <div key={monthIndex} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                    {/* Month Header */}
+                    <div className="bg-[#B91C1C] text-white py-2 px-4 font-bold">
+                      {SPANISH_MONTHS[Number(monthIndex)]}
+                    </div>
+                    
+                    {/* Events */}
+                    <div className="divide-y divide-gray-100">
+                      {(days as Array<{date: Date, lunar: any, events: CalendarEvent[]}>).map((dayItem, dIdx) => (
+                        <div key={dIdx} className="px-4 py-3 flex gap-3">
+                          {/* Date */}
+                          <div className="w-10 text-center shrink-0">
+                            <div className="text-lg font-bold text-gray-800">{dayItem.date.getDate()}</div>
+                            <div className="text-[10px] text-gray-400">{SPANISH_WEEKDAYS[(dayItem.date.getDay() + 6) % 7]}</div>
+                          </div>
+                          
+                          {/* Events */}
+                          <div className="flex-1 space-y-1">
+                            {dayItem.events.map((ev, eIdx) => (
+                              <div key={eIdx} className="flex items-start gap-2">
+                                <span className="text-sm shrink-0">
+                                  {ev.type === 'ceremony' && '🔔'}
+                                  {ev.type === 'moon' && (ev.title.includes('Nueva') ? '🌑' : '🌕')}
+                                  {ev.type === 'natalicio' && '🙏'}
+                                  {ev.type === 'iluminacion' && '✨'}
+                                </span>
+                                <div className="flex-1">
+                                  <p className={`text-sm leading-tight ${ev.isMajor ? 'font-semibold text-[#B91C1C]' : 'text-gray-700'}`}>
+                                    {ev.title}
+                                  </p>
+                                  <p className="text-[10px] text-gray-400 mt-0.5">
+                                    {SPANISH_LUNAR_MONTHS[dayItem.lunar.month - 1]} - {SPANISH_LUNAR_DAYS[dayItem.lunar.day]}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 text-center text-gray-400 text-xs border-t border-gray-100">
+                Calendario Ritual del Templo - {currentDate.getFullYear()}
+              </div>
+            </div>
           </div>
         </div>
       )}
