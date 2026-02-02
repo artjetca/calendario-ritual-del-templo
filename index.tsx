@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Calendar as CalendarIcon, Download, ChevronLeft, ChevronRight, Info, Loader2, X, Image as ImageIcon, Trash2, Upload, FileText, Printer, Share2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, ChevronLeft, ChevronRight, Info, Loader2, X, Image as ImageIcon, Trash2, Upload, FileText, Printer, Share2, Bell, BellRing } from 'lucide-react';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 // --- LUNAR CALENDAR LOGIC (1900-2100) ---
 const LUNAR_INFO = [
@@ -208,6 +209,77 @@ const generateICS = (year: number) => {
   document.body.removeChild(link);
 };
 
+// --- Local Notifications ---
+const scheduleNotifications = async (year: number): Promise<{ success: boolean; count: number; error?: string }> => {
+  try {
+    // Request permission
+    const permResult = await LocalNotifications.requestPermissions();
+    if (permResult.display !== 'granted') {
+      return { success: false, count: 0, error: 'Permiso de notificaciones denegado' };
+    }
+
+    // Cancel existing notifications
+    const pending = await LocalNotifications.getPending();
+    if (pending.notifications.length > 0) {
+      await LocalNotifications.cancel({ notifications: pending.notifications });
+    }
+
+    // Collect all events for the year
+    const notifications: any[] = [];
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31);
+    let notificationId = 1;
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const lunar = toLunar(d);
+      const events = getEventsForDate(lunar);
+      
+      // Only schedule for major events (skip regular moon phases to avoid too many notifications)
+      const majorEvents = events.filter(e => e.isMajor);
+      
+      majorEvents.forEach(event => {
+        // Schedule notification for 1 day before at 9:00 AM
+        const notifyDate = new Date(d);
+        notifyDate.setDate(notifyDate.getDate() - 1);
+        notifyDate.setHours(9, 0, 0, 0);
+        
+        // Only schedule future notifications
+        if (notifyDate > new Date()) {
+          notifications.push({
+            id: notificationId++,
+            title: '📅 Recordatorio del Templo',
+            body: `Mañana: ${event.title}`,
+            schedule: { at: notifyDate },
+            sound: 'default',
+            smallIcon: 'ic_launcher',
+            largeIcon: 'ic_launcher',
+          });
+        }
+      });
+    }
+
+    // Schedule all notifications
+    if (notifications.length > 0) {
+      await LocalNotifications.schedule({ notifications });
+    }
+
+    return { success: true, count: notifications.length };
+  } catch (error: any) {
+    console.error('Error scheduling notifications:', error);
+    return { success: false, count: 0, error: error.message || 'Error desconocido' };
+  }
+};
+
+// Check if notifications are enabled
+const checkNotificationStatus = async (): Promise<boolean> => {
+  try {
+    const result = await LocalNotifications.checkPermissions();
+    return result.display === 'granted';
+  } catch {
+    return false;
+  }
+};
+
 // --- Detect mobile ---
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -227,11 +299,27 @@ const MobileCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showEventDetail, setShowEventDetail] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationResult, setNotificationResult] = useState<{ success: boolean; count: number; error?: string } | null>(null);
   
   useEffect(() => {
     const today = new Date();
     setCurrentDate(today);
+    
+    // Check notification status on load
+    checkNotificationStatus().then(setNotificationsEnabled).catch(() => {});
   }, []);
+  
+  const handleScheduleNotifications = async () => {
+    setIsScheduling(true);
+    const result = await scheduleNotifications(currentDate.getFullYear());
+    setNotificationResult(result);
+    setNotificationsEnabled(result.success);
+    setIsScheduling(false);
+    setShowNotificationModal(true);
+  };
 
   const isToday = (d: Date) => {
     const today = new Date();
@@ -592,19 +680,76 @@ const MobileCalendar = () => {
       <div className="bg-white border-t border-gray-200 flex justify-around py-2 safe-area-bottom">
         <button 
           onClick={handleToday}
-          className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
+          className="flex flex-col items-center text-[#B91C1C] px-4 py-1"
         >
           <CalendarIcon size={20} />
           <span className="text-xs mt-0.5">Hoy</span>
         </button>
         <button 
+          onClick={handleScheduleNotifications}
+          disabled={isScheduling}
+          className={`flex flex-col items-center px-4 py-1 ${notificationsEnabled ? 'text-green-600' : 'text-[#B91C1C]'}`}
+        >
+          {isScheduling ? (
+            <Loader2 size={20} className="animate-spin" />
+          ) : notificationsEnabled ? (
+            <BellRing size={20} />
+          ) : (
+            <Bell size={20} />
+          )}
+          <span className="text-xs mt-0.5">Recordar</span>
+        </button>
+        <button 
           onClick={() => generateICS(currentDate.getFullYear())}
-          className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
+          className="flex flex-col items-center text-[#B91C1C] px-4 py-1"
         >
           <Download size={20} />
           <span className="text-xs mt-0.5">Exportar</span>
         </button>
       </div>
+
+      {/* Notification Result Modal */}
+      {showNotificationModal && notificationResult && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowNotificationModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl w-full max-w-sm overflow-hidden animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className={`p-6 text-center ${notificationResult.success ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center ${notificationResult.success ? 'bg-green-100' : 'bg-red-100'}`}>
+                {notificationResult.success ? (
+                  <BellRing size={32} className="text-green-600" />
+                ) : (
+                  <Bell size={32} className="text-red-600" />
+                )}
+              </div>
+              <h3 className={`text-xl font-bold mt-4 ${notificationResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                {notificationResult.success ? 'Recordatorios Activados' : 'Error'}
+              </h3>
+              <p className="text-gray-600 mt-2">
+                {notificationResult.success 
+                  ? `Se han programado ${notificationResult.count} recordatorios para ${currentDate.getFullYear()}`
+                  : notificationResult.error
+                }
+              </p>
+              {notificationResult.success && (
+                <p className="text-sm text-gray-500 mt-2">
+                  Recibirás una notificación 1 día antes de cada evento importante
+                </p>
+              )}
+            </div>
+            <button 
+              onClick={() => setShowNotificationModal(false)}
+              className="w-full py-4 text-[#B91C1C] font-semibold border-t border-gray-100"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Event Detail Modal */}
       {showEventDetail && selectedDate && selectedEvents.length > 0 && (
