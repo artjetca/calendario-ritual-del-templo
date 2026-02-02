@@ -540,9 +540,6 @@ const MobileCalendar = () => {
                           <p className={`text-sm font-medium leading-tight ${mainEvent.isMajor ? 'text-[#B91C1C]' : 'text-gray-800'}`}>
                             {mainEvent.title}
                           </p>
-                          {mainEvent.chinese && (
-                            <p className="text-xs text-gray-500 mt-0.5">{mainEvent.chinese}</p>
-                          )}
                         </div>
                       </div>
                       
@@ -688,9 +685,6 @@ const MobileCalendar = () => {
                         <div className="font-bold text-gray-900">
                           {event.title}
                         </div>
-                        {event.chinese && (
-                          <div className="text-sm text-gray-600 mt-1">{event.chinese}</div>
-                        )}
                       </div>
                     </div>
                   </div>
