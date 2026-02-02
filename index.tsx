@@ -222,7 +222,7 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// --- MOBILE CALENDAR COMPONENT (iPhone Style + 方案D) ---
+// --- MOBILE CALENDAR COMPONENT (iPhone Style + Plan D - Spanish) ---
 const MobileCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -318,23 +318,11 @@ const MobileCalendar = () => {
     }
   };
 
-  // Get event icon
-  const getEventIcon = (event: CalendarEvent) => {
-    if (event.type === 'moon') {
-      return event.title.includes('Nueva') ? '🌑' : '🌕';
-    }
-    if (event.type === 'ceremony') return '�ثم';
-    if (event.type === 'natalicio') return '🙏';
-    if (event.type === 'iluminacion') return '✨';
-    return '📅';
-  };
-
-  // Get lunar display with icon for events
+  // Get lunar display with icon for events (Spanish)
   const getLunarDisplay = (date: Date) => {
     const lunar = toLunar(date);
     const events = getEventsForDate(lunar);
     
-    // Check for special events
     const moonEvent = events.find(e => e.type === 'moon');
     const ceremonyEvent = events.find(e => e.type === 'ceremony');
     const otherEvent = events.find(e => e.type === 'natalicio' || e.type === 'iluminacion');
@@ -344,8 +332,8 @@ const MobileCalendar = () => {
     else if (moonEvent) icon = moonEvent.title.includes('Nueva') ? '🌑' : '🌕';
     else if (otherEvent) icon = otherEvent.type === 'natalicio' ? '🙏' : '✨';
     
-    // Show month name on day 1
-    let text = lunar.day === 1 ? CHINESE_LUNAR_MONTHS[lunar.month - 1] : CHINESE_LUNAR_DAYS[lunar.day];
+    // Spanish lunar display
+    let text = lunar.day === 1 ? SPANISH_LUNAR_MONTHS[lunar.month - 1] : SPANISH_LUNAR_DAYS[lunar.day];
     
     return { icon, text, hasEvent: events.length > 0, hasMajor: events.some(e => e.isMajor) };
   };
@@ -361,11 +349,11 @@ const MobileCalendar = () => {
     const hasIluminacion = events.some(e => e.type === 'iluminacion');
     const hasMoon = events.some(e => e.type === 'moon' && !events.some(ee => ee.isMajor));
     
-    if (hasCeremony) return '#B91C1C'; // Red - ceremonies
-    if (hasNatalicio) return '#7c3aed'; // Purple - birthdays
-    if (hasIluminacion) return '#0891b2'; // Cyan - memorial
-    if (hasMoon) return '#f59e0b'; // Orange - moon only
-    return '#10b981'; // Green - other
+    if (hasCeremony) return '#B91C1C';
+    if (hasNatalicio) return '#7c3aed';
+    if (hasIluminacion) return '#0891b2';
+    if (hasMoon) return '#f59e0b';
+    return '#10b981';
   };
 
   const selectedLunar = selectedDate ? toLunar(selectedDate) : null;
@@ -379,30 +367,30 @@ const MobileCalendar = () => {
           onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), 1))}
           className="text-[#B91C1C] font-medium"
         >
-          &lt; {currentDate.getFullYear() - 1}年
+          &lt; {currentDate.getFullYear() - 1}
         </button>
-        <h1 className="text-lg font-semibold">農曆行事曆</h1>
+        <h1 className="text-lg font-semibold">Calendario Lunar</h1>
         <button 
           onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, currentDate.getMonth(), 1))}
           className="text-[#B91C1C] font-medium"
         >
-          {currentDate.getFullYear() + 1}年 &gt;
+          {currentDate.getFullYear() + 1} &gt;
         </button>
       </div>
 
       {/* Month Title */}
       <div className="px-4 py-3 bg-white border-b border-gray-100">
         <h2 className="text-2xl font-bold text-black">
-          {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
+          {SPANISH_MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
         </h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          {SPANISH_MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+          Calendario Ritual del Templo
         </p>
       </div>
 
       {/* Weekday Headers */}
       <div className="grid grid-cols-7 bg-white">
-        {CHINESE_WEEKDAYS.map((day, idx) => (
+        {SPANISH_WEEKDAYS.map((day, idx) => (
           <div 
             key={day} 
             className={`py-2 text-center text-xs font-medium ${
@@ -499,10 +487,10 @@ const MobileCalendar = () => {
           <div className="px-4 py-3 bg-gradient-to-r from-[#B91C1C] to-[#dc2626] text-white">
             <h3 className="font-bold text-base flex items-center gap-2">
               <CalendarIcon size={18} />
-              {currentDate.getMonth() + 1}月 重要日期
+              Fechas Importantes - {SPANISH_MONTHS[currentDate.getMonth()]}
             </h3>
             <p className="text-xs text-white/80 mt-0.5">
-              {monthlyEvents.length} 個事件
+              {monthlyEvents.length} {monthlyEvents.length === 1 ? 'evento' : 'eventos'}
             </p>
           </div>
           
@@ -510,7 +498,7 @@ const MobileCalendar = () => {
           <div className="divide-y divide-gray-100">
             {monthlyEvents.length === 0 ? (
               <div className="px-4 py-6 text-center text-gray-400 text-sm">
-                本月無重要事件
+                No hay eventos importantes este mes
               </div>
             ) : (
               monthlyEvents.map((item, idx) => {
@@ -535,7 +523,7 @@ const MobileCalendar = () => {
                         {item.date.getDate()}
                       </span>
                       <span className="text-[9px] text-gray-500">
-                        {CHINESE_WEEKDAYS[(item.date.getDay() + 6) % 7]}
+                        {SPANISH_WEEKDAYS[(item.date.getDay() + 6) % 7]}
                       </span>
                     </div>
                     
@@ -561,11 +549,11 @@ const MobileCalendar = () => {
                       {/* Lunar Info */}
                       <div className="mt-1 flex items-center gap-2">
                         <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
-                          {CHINESE_LUNAR_MONTHS[item.lunar.month - 1]} {CHINESE_LUNAR_DAYS[item.lunar.day]}
+                          {SPANISH_LUNAR_MONTHS[item.lunar.month - 1]} - {SPANISH_LUNAR_DAYS[item.lunar.day]}
                         </span>
                         {item.events.length > 1 && (
                           <span className="text-[10px] text-gray-400">
-                            +{item.events.length - 1} 更多
+                            +{item.events.length - 1} más
                           </span>
                         )}
                       </div>
@@ -581,23 +569,23 @@ const MobileCalendar = () => {
         
         {/* Legend */}
         <div className="mt-3 px-2">
-          <p className="text-[10px] text-gray-400 mb-2">圖例說明</p>
+          <p className="text-[10px] text-gray-400 mb-2">Leyenda</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
             <span className="flex items-center gap-1">
               <span className="w-3 h-1 rounded-full bg-[#B91C1C]"></span>
-              <span className="text-gray-500">大典/新年</span>
+              <span className="text-gray-500">Ceremonia</span>
             </span>
             <span className="flex items-center gap-1">
               <span className="w-3 h-1 rounded-full bg-[#7c3aed]"></span>
-              <span className="text-gray-500">誕辰</span>
+              <span className="text-gray-500">Natalicio</span>
             </span>
             <span className="flex items-center gap-1">
               <span className="w-3 h-1 rounded-full bg-[#0891b2]"></span>
-              <span className="text-gray-500">圓寂紀念</span>
+              <span className="text-gray-500">Conmemoración</span>
             </span>
             <span className="flex items-center gap-1">
               <span className="w-3 h-1 rounded-full bg-[#f59e0b]"></span>
-              <span className="text-gray-500">初一/十五</span>
+              <span className="text-gray-500">Día 1 / Día 15</span>
             </span>
           </div>
         </div>
@@ -610,14 +598,14 @@ const MobileCalendar = () => {
           className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
         >
           <CalendarIcon size={20} />
-          <span className="text-xs mt-0.5">今天</span>
+          <span className="text-xs mt-0.5">Hoy</span>
         </button>
         <button 
           onClick={() => generateICS(currentDate.getFullYear())}
           className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
         >
           <Download size={20} />
-          <span className="text-xs mt-0.5">匯出ICS</span>
+          <span className="text-xs mt-0.5">Exportar</span>
         </button>
       </div>
 
@@ -641,13 +629,13 @@ const MobileCalendar = () => {
               <div className="flex justify-between items-start">
                 <div>
                   <div className="text-2xl font-bold text-gray-900">
-                    {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日
+                    {selectedDate.getDate()} de {SPANISH_MONTHS[selectedDate.getMonth()]}
                   </div>
                   <div className="text-base text-[#B91C1C] font-medium mt-0.5">
-                    {selectedLunar && `${CHINESE_LUNAR_MONTHS[selectedLunar.month - 1]} ${CHINESE_LUNAR_DAYS[selectedLunar.day]}`}
+                    {selectedLunar && `${SPANISH_LUNAR_MONTHS[selectedLunar.month - 1]} - ${SPANISH_LUNAR_DAYS[selectedLunar.day]}`}
                   </div>
                   <div className="text-sm text-gray-500 mt-0.5">
-                    {SPANISH_MONTHS[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+                    Calendario Lunar
                   </div>
                 </div>
                 <button 
