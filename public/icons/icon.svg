@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#B91C1C"/>
+  <rect x="80" y="120" width="352" height="320" rx="24" fill="#fdfbf7"/>
+  <rect x="80" y="120" width="352" height="80" rx="24" fill="#8B0000"/>
+  <rect x="80" y="176" width="352" height="24" fill="#8B0000"/>
+  <circle cx="160" cy="160" r="24" fill="#fdfbf7"/>
+  <circle cx="352" cy="160" r="24" fill="#fdfbf7"/>
+  <rect x="136" y="72" width="16" height="72" rx="8" fill="#5d4037"/>
+  <rect x="360" y="72" width="16" height="72" rx="8" fill="#5d4037"/>
+  <!-- Moon symbol -->
+  <circle cx="256" cy="300" r="60" fill="#B91C1C" opacity="0.2"/>
+  <path d="M256 240 a60 60 0 0 1 0 120 a40 40 0 0 0 0 -120" fill="#B91C1C"/>
+  <!-- Chinese character hint -->
+  <text x="256" y="420" text-anchor="middle" font-size="48" font-family="serif" fill="#B91C1C" font-weight="bold">禮</text>
+</svg>

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Calendario Ritual del Templo</string>
+    <string name="title_activity_main">Calendario Ritual del Templo</string>
+    <string name="package_name">com.templo.calendario</string>
+    <string name="custom_url_scheme">com.templo.calendario</string>
+</resources>
