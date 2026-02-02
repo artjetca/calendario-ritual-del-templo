@@ -27,10 +27,25 @@ const LUNAR_INFO = [
   0x0d520
 ];
 
+// Chinese weekdays for iPhone style
+const CHINESE_WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 const SPANISH_WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const SPANISH_MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+// Chinese lunar day names
+const CHINESE_LUNAR_DAYS = [
+  '', '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
+];
+
+// Chinese lunar month names
+const CHINESE_LUNAR_MONTHS = [
+  '正月', '二月', '三月', '四月', '五月', '六月',
+  '七月', '八月', '九月', '十月', '冬月', '腊月'
 ];
 
 const SPANISH_LUNAR_MONTHS = [
@@ -131,7 +146,6 @@ const EVENT_RULES = [
 function getEventsForDate(lunar: { year: number, month: number, day: number, isLeap: boolean }): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   
-  // 1. Static Rules
   EVENT_RULES.forEach(rule => {
     let match = false;
     if (rule.lunarMonth === 0) {
@@ -140,7 +154,6 @@ function getEventsForDate(lunar: { year: number, month: number, day: number, isL
       if (lunar.month === rule.lunarMonth && lunar.day === rule.lunarDay && !lunar.isLeap) match = true;
     }
     if (match) {
-      // Helper to determine type if not explicitly set (fallback)
       let type = rule.type;
       if (!type) {
          if (rule.title.includes('Ceremonia')) type = 'ceremony';
@@ -153,8 +166,6 @@ function getEventsForDate(lunar: { year: number, month: number, day: number, isL
     }
   });
 
-  // 2. Dynamic Rules (Chinese New Year's Eve / 除夕)
-  // Occurs on the last day of the 12th lunar month (29th or 30th)
   if (lunar.month === 12 && !lunar.isLeap) {
       const daysInCurrentLunarMonth = monthDays(lunar.year, 12);
       if (lunar.day === daysInCurrentLunarMonth) {
@@ -167,7 +178,6 @@ function getEventsForDate(lunar: { year: number, month: number, day: number, isL
 
 // --- ICS Generation ---
 const generateICS = (year: number) => {
-  // Ensure CRLF for compatibility
   const newline = '\r\n';
   let icsContent = `BEGIN:VCALENDAR${newline}VERSION:2.0${newline}PRODID:-//TaoistTemple//Calendar//ES${newline}CALSCALE:GREGORIAN${newline}METHOD:PUBLISH${newline}X-WR-CALNAME:Calendario Ritual del Templo ${year}${newline}`;
 
@@ -198,12 +208,317 @@ const generateICS = (year: number) => {
   document.body.removeChild(link);
 };
 
-// --- COMPONENTS ---
+// --- Detect mobile ---
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  
+  return isMobile;
+};
 
-const App = () => {
-  // View State
-  const [currentDate, setCurrentDate] = useState(new Date()); // Tracks the month being viewed
-  const [selectedDate, setSelectedDate] = useState(new Date()); // Tracks the specific day clicked
+// --- MOBILE CALENDAR COMPONENT (iPhone Style) ---
+const MobileCalendar = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showEventDetail, setShowEventDetail] = useState(false);
+  
+  useEffect(() => {
+    const today = new Date();
+    setCurrentDate(today);
+  }, []);
+
+  const isToday = (d: Date) => {
+    const today = new Date();
+    return d.getDate() === today.getDate() && 
+           d.getMonth() === today.getMonth() && 
+           d.getFullYear() === today.getFullYear();
+  };
+
+  const isSelected = (d: Date) => {
+    if (!selectedDate) return false;
+    return d.getDate() === selectedDate.getDate() && 
+           d.getMonth() === selectedDate.getMonth() && 
+           d.getFullYear() === selectedDate.getFullYear();
+  };
+
+  // Generate calendar for current month
+  const calendarDays = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days = [];
+    
+    // Monday = 0, Sunday = 6
+    const firstDayIndex = (firstDay.getDay() + 6) % 7;
+    
+    // Previous month padding
+    const prevMonth = new Date(year, month, 0);
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      days.push({ 
+        date: new Date(year, month - 1, prevMonth.getDate() - i), 
+        isCurrentMonth: false 
+      });
+    }
+    
+    // Current month
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push({ date: new Date(year, month, i), isCurrentMonth: true });
+    }
+    
+    // Next month padding
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+      days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
+    }
+    
+    return days;
+  }, [currentDate]);
+
+  const handlePrevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const handleToday = () => {
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDate(null);
+  };
+
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+    const lunar = toLunar(date);
+    const events = getEventsForDate(lunar);
+    if (events.length > 0) {
+      setShowEventDetail(true);
+    }
+  };
+
+  // Get lunar display text for a date
+  const getLunarText = (date: Date) => {
+    const lunar = toLunar(date);
+    // Show month name on day 1, otherwise show day
+    if (lunar.day === 1) {
+      return CHINESE_LUNAR_MONTHS[lunar.month - 1];
+    }
+    return CHINESE_LUNAR_DAYS[lunar.day];
+  };
+
+  // Get event indicator color
+  const getEventDot = (date: Date) => {
+    const lunar = toLunar(date);
+    const events = getEventsForDate(lunar);
+    if (events.length === 0) return null;
+    
+    const hasMajor = events.some(e => e.isMajor);
+    const hasMoon = events.some(e => e.type === 'moon');
+    
+    if (hasMajor) return '#B91C1C'; // Red for major events
+    if (hasMoon) return '#f59e0b'; // Orange for moon phases
+    return '#10b981'; // Green for other
+  };
+
+  const selectedLunar = selectedDate ? toLunar(selectedDate) : null;
+  const selectedEvents = selectedLunar ? getEventsForDate(selectedLunar) : [];
+
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Header */}
+      <div className="bg-[#f8f8f8] border-b border-gray-200 px-4 py-2 flex items-center justify-between safe-area-top">
+        <button 
+          onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), 1))}
+          className="text-[#B91C1C] font-medium text-lg"
+        >
+          &lt; {currentDate.getFullYear() - 1}年
+        </button>
+        <div className="flex items-center gap-4">
+          <button className="p-2 text-gray-600">
+            <CalendarIcon size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Month Title */}
+      <div className="px-4 py-3 bg-white">
+        <h1 className="text-2xl font-bold text-black">
+          {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
+        </h1>
+      </div>
+
+      {/* Weekday Headers */}
+      <div className="grid grid-cols-7 bg-white border-b border-gray-100">
+        {CHINESE_WEEKDAYS.map((day, idx) => (
+          <div 
+            key={day} 
+            className={`py-2 text-center text-sm font-medium ${
+              idx >= 5 ? 'text-gray-400' : 'text-gray-600'
+            }`}
+          >
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="flex-1 overflow-auto">
+        <div className="grid grid-cols-7">
+          {calendarDays.map((item, idx) => {
+            const lunar = toLunar(item.date);
+            const eventDot = getEventDot(item.date);
+            const isWeekend = item.date.getDay() === 0 || item.date.getDay() === 6;
+            const todayDate = isToday(item.date);
+            const selected = isSelected(item.date);
+            
+            return (
+              <button 
+                key={idx}
+                onClick={() => handleDateClick(item.date)}
+                className={`
+                  aspect-square flex flex-col items-center justify-center py-1 relative
+                  ${!item.isCurrentMonth ? 'opacity-30' : ''}
+                  ${selected ? 'bg-red-50' : ''}
+                `}
+              >
+                {/* Solar Date */}
+                <div className={`
+                  w-9 h-9 flex items-center justify-center rounded-full text-lg font-medium
+                  ${todayDate ? 'bg-[#B91C1C] text-white' : ''}
+                  ${!todayDate && isWeekend && item.isCurrentMonth ? 'text-gray-400' : ''}
+                  ${!todayDate && !isWeekend && item.isCurrentMonth ? 'text-black' : ''}
+                  ${selected && !todayDate ? 'bg-gray-100' : ''}
+                `}>
+                  {item.date.getDate()}
+                </div>
+                
+                {/* Lunar Date */}
+                <div className={`
+                  text-[10px] leading-tight mt-0.5
+                  ${lunar.day === 1 ? 'text-[#B91C1C] font-medium' : 'text-gray-400'}
+                  ${todayDate ? 'text-[#B91C1C]' : ''}
+                `}>
+                  {getLunarText(item.date)}
+                </div>
+
+                {/* Event Indicator Dot */}
+                {eventDot && (
+                  <div 
+                    className="absolute bottom-1 w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: eventDot }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Month Navigation Swipe Area */}
+        <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100">
+          <button 
+            onClick={handlePrevMonth}
+            className="flex items-center text-[#B91C1C] font-medium"
+          >
+            <ChevronLeft size={20} />
+            <span>{SPANISH_MONTHS[currentDate.getMonth() === 0 ? 11 : currentDate.getMonth() - 1]}</span>
+          </button>
+          <button 
+            onClick={handleNextMonth}
+            className="flex items-center text-[#B91C1C] font-medium"
+          >
+            <span>{SPANISH_MONTHS[currentDate.getMonth() === 11 ? 0 : currentDate.getMonth() + 1]}</span>
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom Navigation */}
+      <div className="bg-[#f8f8f8] border-t border-gray-200 flex justify-around py-2 safe-area-bottom">
+        <button 
+          onClick={handleToday}
+          className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
+        >
+          <span className="text-sm font-medium">Hoy</span>
+        </button>
+        <button 
+          onClick={() => generateICS(currentDate.getFullYear())}
+          className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
+        >
+          <Download size={20} />
+          <span className="text-xs mt-0.5">ICS</span>
+        </button>
+      </div>
+
+      {/* Event Detail Modal */}
+      {showEventDetail && selectedDate && selectedEvents.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
+          <div className="bg-white w-full rounded-t-2xl max-h-[70vh] overflow-auto animate-slide-up">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex justify-between items-center">
+              <div>
+                <div className="text-lg font-bold">
+                  {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日
+                </div>
+                <div className="text-sm text-gray-500">
+                  {selectedLunar && `${CHINESE_LUNAR_MONTHS[selectedLunar.month - 1]} ${CHINESE_LUNAR_DAYS[selectedLunar.day]}`}
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowEventDetail(false)}
+                className="text-[#B91C1C] font-medium"
+              >
+                關閉
+              </button>
+            </div>
+
+            {/* Events List */}
+            <div className="p-4 space-y-3">
+              {selectedEvents.map((event, idx) => (
+                <div 
+                  key={idx}
+                  className={`
+                    p-4 rounded-xl border-l-4
+                    ${event.isMajor ? 'bg-red-50 border-[#B91C1C]' : 'bg-gray-50 border-gray-300'}
+                  `}
+                >
+                  <div className={`font-bold ${event.isMajor ? 'text-[#B91C1C]' : 'text-gray-800'}`}>
+                    {event.title}
+                  </div>
+                  {event.chinese && (
+                    <div className="text-sm text-gray-600 mt-1">{event.chinese}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .safe-area-top { padding-top: env(safe-area-inset-top); }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        @keyframes slide-up {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slide-up 0.3s ease-out; }
+      `}</style>
+    </div>
+  );
+};
+
+// --- DESKTOP CALENDAR COMPONENT ---
+const DesktopCalendar = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [showYearlySummary, setShowYearlySummary] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [customImages, setCustomImages] = useState<Record<string, string>>(() => {
@@ -214,19 +529,16 @@ const App = () => {
     }
   });
   
-  // Initialize selectedDate to today on load
   useEffect(() => {
     const today = new Date();
     setCurrentDate(today);
     setSelectedDate(today);
   }, []);
 
-  // Save images to localStorage when changed
   useEffect(() => {
     localStorage.setItem('temple_calendar_images', JSON.stringify(customImages));
   }, [customImages]);
 
-  // Calculate all yearly events for the list view
   const yearlyEvents = useMemo(() => {
     const year = currentDate.getFullYear();
     const eventsByMonth: Record<number, Array<{date: Date, lunar: any, events: CalendarEvent[]}>> = {};
@@ -250,7 +562,6 @@ const App = () => {
     return eventsByMonth;
   }, [currentDate.getFullYear()]);
 
-  // Calendar Grid Logic (Monday start)
   const daysInMonth = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -262,18 +573,15 @@ const App = () => {
 
     const prevMonthLastDate = new Date(year, month, 0).getDate();
     
-    // Previous month padding
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       days.push({ date: new Date(year, month - 1, prevMonthLastDate - i), isCurrentMonth: false });
     }
 
-    // Current month days
     while (date.getMonth() === month) {
       days.push({ date: new Date(date), isCurrentMonth: true });
       date.setDate(date.getDate() + 1);
     }
 
-    // Next month padding
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
@@ -289,7 +597,6 @@ const App = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  // Image Upload Handlers
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -320,15 +627,13 @@ const App = () => {
     
     setIsGeneratingPDF(true);
 
-    // Use 0 margin in jsPDF and control spacing via CSS padding
-    // This ensures the content fits exactly 210mm width without clipping
     const opt = {
-      margin:       0, 
-      filename:     `Calendario_Ritual_${currentDate.getFullYear()}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false }, 
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak:    { mode: ['avoid-all'] }
+      margin: 0, 
+      filename: `Calendario_Ritual_${currentDate.getFullYear()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false }, 
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all'] }
     };
 
     // @ts-ignore
@@ -347,7 +652,6 @@ const App = () => {
     }
   };
 
-  // Render Logic
   const selectedLunar = useMemo(() => toLunar(selectedDate), [selectedDate]);
   const selectedEvents = useMemo(() => getEventsForDate(selectedLunar), [selectedLunar]);
   const selectedDateKey = selectedDate.toISOString().split('T')[0];
@@ -367,13 +671,11 @@ const App = () => {
            d.getFullYear() === today.getFullYear();
   };
 
-  // Helper to render content inside grid cell
   const renderGridContent = (date: Date, lunar: any, events: CalendarEvent[]) => {
     const ceremony = events.find(e => e.type === 'ceremony');
     const moon = events.find(e => e.type === 'moon');
     const other = events.find(e => e.type === 'natalicio' || e.type === 'iluminacion');
     
-    // Style 1: Ceremony (and optionally Moon if fits)
     if (ceremony) {
        return (
          <div className="flex flex-col text-[11px] leading-tight">
@@ -397,7 +699,6 @@ const App = () => {
        );
     }
 
-    // Style 2: Moon + Other (Combined)
     if (moon && other) {
         const iconEnd = other.type === 'natalicio' ? '❀' : '✨';
         const iconStart = moon.title.includes('Nueva') ? '🌑' : '🌕';
@@ -406,7 +707,6 @@ const App = () => {
           .replace('Fallecimiento de ', '')
           .replace('Día de Iluminación ', '')
           .replace('Iluminación ', '');
-        // Handle long titles in grid
         const displayTitle = shortOtherTitle.length > 20 ? shortOtherTitle.substring(0, 18) + '...' : shortOtherTitle;
 
         return (
@@ -428,7 +728,6 @@ const App = () => {
         );
     }
 
-    // Style 3: Moon Only
     if (moon) {
         const icon = moon.title.includes('Nueva') ? '🌑' : '🌕';
         return (
@@ -441,10 +740,8 @@ const App = () => {
         );
     }
 
-    // Style 4: Other Only
     if (other) {
         const icon = other.type === 'natalicio' ? '❀' : '✨';
-        // Simplify title for grid
         const shortOtherTitle = other.title.length > 30 ? other.title.substring(0, 28) + '...' : other.title;
         
         return (
@@ -458,27 +755,18 @@ const App = () => {
         );
     }
 
-    return (
-        <div className="text-stone-400 text-[10px] mt-2">
-        </div>
-    );
+    return <div className="text-stone-400 text-[10px] mt-2"></div>;
   };
 
   return (
     <div className="min-h-screen bg-[#fdfbf7] text-stone-800 font-serif flex flex-col">
       <style>{`
-        /* Ensure the printable area has proper background for PDF generation */
-        #printable-summary {
-            background-color: white;
-        }
+        #printable-summary { background-color: white; }
         .print-break-inside-avoid { break-inside: avoid; }
       `}</style>
       
-      {/* WRAPPER FOR MAIN UI */}
       <div className="flex flex-col lg:flex-row h-screen overflow-hidden">
-        {/* LEFT: Calendar Grid */}
         <div className="flex-1 flex flex-col h-screen overflow-y-auto lg:overflow-hidden border-r border-stone-300">
-          {/* Header */}
           <header className="bg-[#B91C1C] text-white p-4 shadow-md z-10">
             <div className="max-w-5xl mx-auto flex flex-wrap justify-between items-center gap-2">
               <h1 className="text-2xl font-bold tracking-wider flex items-center gap-2">
@@ -497,7 +785,6 @@ const App = () => {
             </div>
           </header>
 
-          {/* Month Navigation */}
           <div className="flex items-center justify-between p-4 bg-[#f5f0e6] border-b border-stone-300">
              <button onClick={handlePrevMonth} className="p-2 hover:bg-stone-200 rounded-full transition text-stone-600">
                <ChevronLeft size={24} />
@@ -513,7 +800,6 @@ const App = () => {
              </button>
           </div>
 
-          {/* Weekday Headers */}
           <div className="grid grid-cols-7 bg-[#e8e4d9] border-b border-stone-300">
             {SPANISH_WEEKDAYS.map(day => (
               <div key={day} className={`py-2 text-center font-bold text-sm ${day === 'Dom' || day === 'Sáb' ? 'text-[#B91C1C]' : 'text-stone-600'}`}>
@@ -522,7 +808,6 @@ const App = () => {
             ))}
           </div>
 
-          {/* Days Grid */}
           <div className="grid grid-cols-7 flex-1 auto-rows-fr bg-stone-200 gap-px border-b border-stone-300">
             {daysInMonth.map((item, idx) => {
               const lunar = toLunar(item.date);
@@ -551,12 +836,10 @@ const App = () => {
                      )}
                   </div>
 
-                  {/* Content Body */}
                   <div className="w-full text-left mt-1 relative z-10">
                       {renderGridContent(item.date, lunar, events)}
                   </div>
 
-                  {/* Background Image Hint (Optional) */}
                   {hasCustomImage && (
                       <div className="absolute inset-0 opacity-10 z-0">
                           <img src={hasCustomImage} className="w-full h-full object-cover" alt="" />
@@ -569,10 +852,8 @@ const App = () => {
           </div>
         </div>
 
-        {/* RIGHT: Detail Panel (Perpetual Calendar Style Sidebar) */}
         <div className="w-full lg:w-[400px] bg-[#fdfbf7] flex flex-col h-[50vh] lg:h-screen overflow-y-auto border-t lg:border-t-0 lg:border-l border-stone-300 shadow-2xl relative z-20">
            
-           {/* Date Header */}
            <div className="p-6 pb-2 text-center border-b border-stone-200 border-dashed">
               <div className="text-[#c62828] text-xl font-bold mb-1">
                  {SPANISH_WEEKDAYS[(selectedDate.getDay() + 6) % 7]}
@@ -585,10 +866,8 @@ const App = () => {
               </div>
            </div>
 
-           {/* Lunar & Info */}
            <div className="p-6 text-center space-y-6 flex-1 flex flex-col">
               
-              {/* High Prominence Lunar Box */}
               <div className="relative border-y-4 border-double border-stone-800 py-4 px-2 bg-[#fdfbf7]">
                   <div className="text-stone-500 text-xs uppercase tracking-widest mb-2 font-bold">Calendario Lunar</div>
                   <div className="text-2xl font-bold text-stone-900 leading-tight">
@@ -598,7 +877,6 @@ const App = () => {
                       {SPANISH_LUNAR_DAYS[selectedLunar.day]}
                   </div>
                   
-                  {/* Additional Lunar Phase Text */}
                   {(selectedLunar.day === 1 || selectedLunar.day === 15) && (
                       <div className="text-[#B91C1C] font-bold text-lg mt-1 tracking-wide">
                           {selectedLunar.day === 1 ? '(Luna Nueva)' : '(Luna Llena)'}
@@ -608,7 +886,6 @@ const App = () => {
                   {selectedLunar.isLeap && <span className="block mt-2 text-sm text-amber-700 font-bold border border-amber-700 rounded-full px-2 py-0.5 mx-auto w-max">Mes Bisiesto</span>}
               </div>
 
-              {/* Prominent Primary Event (Like Screenshot) */}
               {primaryEvent && (
                   <div className="bg-stone-100 border border-stone-300 rounded-lg p-3 shadow-sm">
                       <div className="text-lg font-bold text-stone-800">{primaryEvent.title}</div>
@@ -616,7 +893,6 @@ const App = () => {
                   </div>
               )}
 
-              {/* Other Events List */}
               {selectedEvents.length > 0 && (
                   <div className="space-y-2 text-left">
                      {selectedEvents.filter(e => e !== primaryEvent).map((ev, idx) => (
@@ -634,7 +910,6 @@ const App = () => {
                   </div>
               )}
               
-              {/* Image Upload Section */}
               <div className="mt-auto pt-4">
                   <div className="border-2 border-dashed border-stone-300 rounded-lg h-56 flex items-center justify-center relative overflow-hidden group bg-stone-50 transition hover:border-stone-400 hover:bg-stone-100">
                       {currentImage ? (
@@ -667,12 +942,10 @@ const App = () => {
         </div>
       </div>
       
-      {/* MODAL: Yearly Summary */}
       {showYearlySummary && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-stone-100 w-full max-w-6xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
               
-              {/* Modal Header */}
               <div className="p-4 border-b flex justify-between items-center bg-[#B91C1C] text-white shrink-0">
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5" />
@@ -681,38 +954,31 @@ const App = () => {
                 <button onClick={() => setShowYearlySummary(false)} className="hover:bg-white/20 p-1 rounded"><X /></button>
               </div>
 
-              {/* Scrollable Content Area - Centered to show A4 Page */}
               <div className="flex-1 overflow-y-auto p-8 bg-stone-200/50 flex justify-center">
                   
-                  {/* A4 Container - Compacted to ensure 1-page fit */}
                   <div id="printable-summary" className="bg-white shadow-xl shrink-0" style={{ width: '210mm', minHeight: '297mm', padding: '5mm' }}>
                       <div className="text-center mb-2 border-b-2 border-[#B91C1C] pb-2">
                         <h1 className="text-xl font-bold text-[#B91C1C] uppercase tracking-wider">Calendario Ritual del Templo {currentDate.getFullYear()}</h1>
                       </div>
 
-                      {/* 3-Column Grid - Tightened Gaps */}
                       <div className="grid grid-cols-3 gap-3">
                         {Object.entries(yearlyEvents).map(([monthIndex, days]) => (
                           <div key={monthIndex} className="break-inside-avoid border border-stone-200 rounded-lg overflow-hidden flex flex-col shadow-sm h-fit">
                             
-                            {/* Month Header - Compact */}
                             <div className="bg-[#B91C1C] text-white py-1 px-2 font-bold text-center text-xs uppercase tracking-wide">
                               {SPANISH_MONTHS[Number(monthIndex)]}
                             </div>
                             
-                            {/* Events List - Compact */}
                             <div className="p-1.5 bg-stone-50 flex-1 space-y-1">
                               {(days as Array<{date: Date, lunar: any, events: CalendarEvent[]}>).map((dayItem, dIdx) => {
                                 const isWeekend = dayItem.date.getDay() === 0 || dayItem.date.getDay() === 6;
                                 
                                 return (
                                   <div key={dIdx} className="flex gap-1.5 text-[9px] border-b border-stone-200 pb-1 last:border-0 last:pb-0 leading-tight">
-                                    {/* Date */}
                                     <div className={`w-4 text-right font-bold shrink-0 ${isWeekend ? 'text-red-600' : 'text-stone-700'}`}>
                                       {dayItem.date.getDate()}
                                     </div>
 
-                                    {/* Event Info */}
                                     <div className="flex-1 min-w-0">
                                       {dayItem.events.map((ev, eIdx) => (
                                         <div key={eIdx} className="flex flex-col items-start mb-0.5 last:mb-0">
@@ -724,7 +990,6 @@ const App = () => {
                                                 {ev.type === 'iluminacion' && '✨'}
                                               </span>
                                               <div className="flex flex-col">
-                                                  {/* Allow text wrap but keep compact */}
                                                   <span className={`whitespace-normal ${ev.isMajor ? 'font-bold text-[#B91C1C]' : 'text-stone-600'}`}>
                                                     {ev.title}
                                                   </span>
@@ -752,7 +1017,6 @@ const App = () => {
                   </div>
               </div>
 
-              {/* Footer Actions */}
               <div className="p-4 border-t bg-stone-50 flex justify-end gap-3 shrink-0">
                  <button 
                     id="btn-download-pdf"
@@ -770,6 +1034,13 @@ const App = () => {
 
     </div>
   );
+};
+
+// --- MAIN APP ---
+const App = () => {
+  const isMobile = useIsMobile();
+  
+  return isMobile ? <MobileCalendar /> : <DesktopCalendar />;
 };
 
 const root = createRoot(document.getElementById('root')!);
