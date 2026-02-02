@@ -222,7 +222,7 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// --- MOBILE CALENDAR COMPONENT (iPhone Style) ---
+// --- MOBILE CALENDAR COMPONENT (iPhone Style + 方案D) ---
 const MobileCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -255,10 +255,8 @@ const MobileCalendar = () => {
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
     
-    // Monday = 0, Sunday = 6
     const firstDayIndex = (firstDay.getDay() + 6) % 7;
     
-    // Previous month padding
     const prevMonth = new Date(year, month, 0);
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       days.push({ 
@@ -267,18 +265,34 @@ const MobileCalendar = () => {
       });
     }
     
-    // Current month
     for (let i = 1; i <= lastDay.getDate(); i++) {
       days.push({ date: new Date(year, month, i), isCurrentMonth: true });
     }
     
-    // Next month padding
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
     }
     
     return days;
+  }, [currentDate]);
+
+  // Get monthly events for the event list card
+  const monthlyEvents = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const events: Array<{date: Date, lunar: any, events: CalendarEvent[]}> = [];
+    
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    for (let i = 1; i <= lastDay; i++) {
+      const date = new Date(year, month, i);
+      const lunar = toLunar(date);
+      const dayEvents = getEventsForDate(lunar);
+      if (dayEvents.length > 0) {
+        events.push({ date, lunar, events: dayEvents });
+      }
+    }
+    return events;
   }, [currentDate]);
 
   const handlePrevMonth = () => {
@@ -304,64 +318,95 @@ const MobileCalendar = () => {
     }
   };
 
-  // Get lunar display text for a date
-  const getLunarText = (date: Date) => {
-    const lunar = toLunar(date);
-    // Show month name on day 1, otherwise show day
-    if (lunar.day === 1) {
-      return CHINESE_LUNAR_MONTHS[lunar.month - 1];
+  // Get event icon
+  const getEventIcon = (event: CalendarEvent) => {
+    if (event.type === 'moon') {
+      return event.title.includes('Nueva') ? '🌑' : '🌕';
     }
-    return CHINESE_LUNAR_DAYS[lunar.day];
+    if (event.type === 'ceremony') return '�ثم';
+    if (event.type === 'natalicio') return '🙏';
+    if (event.type === 'iluminacion') return '✨';
+    return '📅';
   };
 
-  // Get event indicator color
-  const getEventDot = (date: Date) => {
+  // Get lunar display with icon for events
+  const getLunarDisplay = (date: Date) => {
+    const lunar = toLunar(date);
+    const events = getEventsForDate(lunar);
+    
+    // Check for special events
+    const moonEvent = events.find(e => e.type === 'moon');
+    const ceremonyEvent = events.find(e => e.type === 'ceremony');
+    const otherEvent = events.find(e => e.type === 'natalicio' || e.type === 'iluminacion');
+    
+    let icon = '';
+    if (ceremonyEvent) icon = '🔔';
+    else if (moonEvent) icon = moonEvent.title.includes('Nueva') ? '🌑' : '🌕';
+    else if (otherEvent) icon = otherEvent.type === 'natalicio' ? '🙏' : '✨';
+    
+    // Show month name on day 1
+    let text = lunar.day === 1 ? CHINESE_LUNAR_MONTHS[lunar.month - 1] : CHINESE_LUNAR_DAYS[lunar.day];
+    
+    return { icon, text, hasEvent: events.length > 0, hasMajor: events.some(e => e.isMajor) };
+  };
+
+  // Get event bar color
+  const getEventBarColor = (date: Date) => {
     const lunar = toLunar(date);
     const events = getEventsForDate(lunar);
     if (events.length === 0) return null;
     
-    const hasMajor = events.some(e => e.isMajor);
-    const hasMoon = events.some(e => e.type === 'moon');
+    const hasCeremony = events.some(e => e.type === 'ceremony');
+    const hasNatalicio = events.some(e => e.type === 'natalicio');
+    const hasIluminacion = events.some(e => e.type === 'iluminacion');
+    const hasMoon = events.some(e => e.type === 'moon' && !events.some(ee => ee.isMajor));
     
-    if (hasMajor) return '#B91C1C'; // Red for major events
-    if (hasMoon) return '#f59e0b'; // Orange for moon phases
-    return '#10b981'; // Green for other
+    if (hasCeremony) return '#B91C1C'; // Red - ceremonies
+    if (hasNatalicio) return '#7c3aed'; // Purple - birthdays
+    if (hasIluminacion) return '#0891b2'; // Cyan - memorial
+    if (hasMoon) return '#f59e0b'; // Orange - moon only
+    return '#10b981'; // Green - other
   };
 
   const selectedLunar = selectedDate ? toLunar(selectedDate) : null;
   const selectedEvents = selectedLunar ? getEventsForDate(selectedLunar) : [];
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-[#f5f5f7] flex flex-col">
       {/* Header */}
-      <div className="bg-[#f8f8f8] border-b border-gray-200 px-4 py-2 flex items-center justify-between safe-area-top">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between safe-area-top">
         <button 
           onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), 1))}
-          className="text-[#B91C1C] font-medium text-lg"
+          className="text-[#B91C1C] font-medium"
         >
           &lt; {currentDate.getFullYear() - 1}年
         </button>
-        <div className="flex items-center gap-4">
-          <button className="p-2 text-gray-600">
-            <CalendarIcon size={20} />
-          </button>
-        </div>
+        <h1 className="text-lg font-semibold">農曆行事曆</h1>
+        <button 
+          onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, currentDate.getMonth(), 1))}
+          className="text-[#B91C1C] font-medium"
+        >
+          {currentDate.getFullYear() + 1}年 &gt;
+        </button>
       </div>
 
       {/* Month Title */}
-      <div className="px-4 py-3 bg-white">
-        <h1 className="text-2xl font-bold text-black">
+      <div className="px-4 py-3 bg-white border-b border-gray-100">
+        <h2 className="text-2xl font-bold text-black">
           {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
-        </h1>
+        </h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {SPANISH_MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+        </p>
       </div>
 
       {/* Weekday Headers */}
-      <div className="grid grid-cols-7 bg-white border-b border-gray-100">
+      <div className="grid grid-cols-7 bg-white">
         {CHINESE_WEEKDAYS.map((day, idx) => (
           <div 
             key={day} 
-            className={`py-2 text-center text-sm font-medium ${
-              idx >= 5 ? 'text-gray-400' : 'text-gray-600'
+            className={`py-2 text-center text-xs font-medium ${
+              idx >= 5 ? 'text-gray-400' : 'text-gray-500'
             }`}
           >
             {day}
@@ -370,11 +415,11 @@ const MobileCalendar = () => {
       </div>
 
       {/* Calendar Grid */}
-      <div className="flex-1 overflow-auto">
-        <div className="grid grid-cols-7">
+      <div className="bg-white">
+        <div className="grid grid-cols-7 gap-px bg-gray-100">
           {calendarDays.map((item, idx) => {
-            const lunar = toLunar(item.date);
-            const eventDot = getEventDot(item.date);
+            const lunarDisplay = getLunarDisplay(item.date);
+            const eventBarColor = getEventBarColor(item.date);
             const isWeekend = item.date.getDay() === 0 || item.date.getDay() === 6;
             const todayDate = isToday(item.date);
             const selected = isSelected(item.date);
@@ -384,120 +429,289 @@ const MobileCalendar = () => {
                 key={idx}
                 onClick={() => handleDateClick(item.date)}
                 className={`
-                  aspect-square flex flex-col items-center justify-center py-1 relative
-                  ${!item.isCurrentMonth ? 'opacity-30' : ''}
+                  bg-white flex flex-col items-center pt-1 pb-2 relative min-h-[72px]
+                  ${!item.isCurrentMonth ? 'opacity-25' : ''}
                   ${selected ? 'bg-red-50' : ''}
+                  active:bg-gray-100
                 `}
               >
                 {/* Solar Date */}
                 <div className={`
-                  w-9 h-9 flex items-center justify-center rounded-full text-lg font-medium
+                  w-8 h-8 flex items-center justify-center rounded-full text-base font-medium
                   ${todayDate ? 'bg-[#B91C1C] text-white' : ''}
                   ${!todayDate && isWeekend && item.isCurrentMonth ? 'text-gray-400' : ''}
-                  ${!todayDate && !isWeekend && item.isCurrentMonth ? 'text-black' : ''}
-                  ${selected && !todayDate ? 'bg-gray-100' : ''}
+                  ${!todayDate && !isWeekend && item.isCurrentMonth ? 'text-gray-900' : ''}
+                  ${selected && !todayDate ? 'ring-2 ring-[#B91C1C]' : ''}
                 `}>
                   {item.date.getDate()}
                 </div>
                 
-                {/* Lunar Date */}
-                <div className={`
-                  text-[10px] leading-tight mt-0.5
-                  ${lunar.day === 1 ? 'text-[#B91C1C] font-medium' : 'text-gray-400'}
-                  ${todayDate ? 'text-[#B91C1C]' : ''}
-                `}>
-                  {getLunarText(item.date)}
+                {/* Lunar Date with Icon */}
+                <div className="flex items-center justify-center gap-0.5 mt-0.5 h-4">
+                  {lunarDisplay.icon && (
+                    <span className="text-[10px]">{lunarDisplay.icon}</span>
+                  )}
+                  <span className={`
+                    text-[10px] leading-tight
+                    ${lunarDisplay.hasMajor ? 'text-[#B91C1C] font-semibold' : ''}
+                    ${!lunarDisplay.hasMajor && lunarDisplay.hasEvent ? 'text-gray-700 font-medium' : ''}
+                    ${!lunarDisplay.hasEvent ? 'text-gray-400' : ''}
+                  `}>
+                    {lunarDisplay.text}
+                  </span>
                 </div>
 
-                {/* Event Indicator Dot */}
-                {eventDot && (
+                {/* Event Bar Indicator */}
+                {eventBarColor && item.isCurrentMonth && (
                   <div 
-                    className="absolute bottom-1 w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: eventDot }}
+                    className="absolute bottom-0.5 left-1 right-1 h-1 rounded-full"
+                    style={{ backgroundColor: eventBarColor }}
                   />
                 )}
               </button>
             );
           })}
         </div>
+      </div>
 
-        {/* Month Navigation Swipe Area */}
-        <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100">
-          <button 
-            onClick={handlePrevMonth}
-            className="flex items-center text-[#B91C1C] font-medium"
-          >
-            <ChevronLeft size={20} />
-            <span>{SPANISH_MONTHS[currentDate.getMonth() === 0 ? 11 : currentDate.getMonth() - 1]}</span>
-          </button>
-          <button 
-            onClick={handleNextMonth}
-            className="flex items-center text-[#B91C1C] font-medium"
-          >
-            <span>{SPANISH_MONTHS[currentDate.getMonth() === 11 ? 0 : currentDate.getMonth() + 1]}</span>
-            <ChevronRight size={20} />
-          </button>
+      {/* Month Navigation */}
+      <div className="flex justify-between items-center px-4 py-3 bg-white border-t border-gray-100">
+        <button 
+          onClick={handlePrevMonth}
+          className="flex items-center text-[#B91C1C] font-medium"
+        >
+          <ChevronLeft size={18} />
+          <span>{SPANISH_MONTHS[currentDate.getMonth() === 0 ? 11 : currentDate.getMonth() - 1]}</span>
+        </button>
+        <button 
+          onClick={handleNextMonth}
+          className="flex items-center text-[#B91C1C] font-medium"
+        >
+          <span>{SPANISH_MONTHS[currentDate.getMonth() === 11 ? 0 : currentDate.getMonth() + 1]}</span>
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      {/* Monthly Events Card */}
+      <div className="flex-1 overflow-auto px-4 py-3">
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          {/* Card Header */}
+          <div className="px-4 py-3 bg-gradient-to-r from-[#B91C1C] to-[#dc2626] text-white">
+            <h3 className="font-bold text-base flex items-center gap-2">
+              <CalendarIcon size={18} />
+              {currentDate.getMonth() + 1}月 重要日期
+            </h3>
+            <p className="text-xs text-white/80 mt-0.5">
+              {monthlyEvents.length} 個事件
+            </p>
+          </div>
+          
+          {/* Events List */}
+          <div className="divide-y divide-gray-100">
+            {monthlyEvents.length === 0 ? (
+              <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                本月無重要事件
+              </div>
+            ) : (
+              monthlyEvents.map((item, idx) => {
+                const mainEvent = item.events.find(e => e.isMajor) || item.events[0];
+                const eventColor = getEventBarColor(item.date);
+                
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSelectedDate(item.date);
+                      setShowEventDetail(true);
+                    }}
+                    className="w-full px-4 py-3 flex items-start gap-3 active:bg-gray-50 text-left"
+                  >
+                    {/* Date Badge */}
+                    <div 
+                      className="w-12 h-12 rounded-xl flex flex-col items-center justify-center shrink-0"
+                      style={{ backgroundColor: eventColor + '15' }}
+                    >
+                      <span className="text-lg font-bold" style={{ color: eventColor }}>
+                        {item.date.getDate()}
+                      </span>
+                      <span className="text-[9px] text-gray-500">
+                        {CHINESE_WEEKDAYS[(item.date.getDay() + 6) % 7]}
+                      </span>
+                    </div>
+                    
+                    {/* Event Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-sm shrink-0">
+                          {mainEvent.type === 'moon' && (mainEvent.title.includes('Nueva') ? '🌑' : '🌕')}
+                          {mainEvent.type === 'ceremony' && '🔔'}
+                          {mainEvent.type === 'natalicio' && '🙏'}
+                          {mainEvent.type === 'iluminacion' && '✨'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium leading-tight ${mainEvent.isMajor ? 'text-[#B91C1C]' : 'text-gray-800'}`}>
+                            {mainEvent.title}
+                          </p>
+                          {mainEvent.chinese && (
+                            <p className="text-xs text-gray-500 mt-0.5">{mainEvent.chinese}</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Lunar Info */}
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
+                          {CHINESE_LUNAR_MONTHS[item.lunar.month - 1]} {CHINESE_LUNAR_DAYS[item.lunar.day]}
+                        </span>
+                        {item.events.length > 1 && (
+                          <span className="text-[10px] text-gray-400">
+                            +{item.events.length - 1} 更多
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <ChevronRight size={16} className="text-gray-300 shrink-0 mt-3" />
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+        
+        {/* Legend */}
+        <div className="mt-3 px-2">
+          <p className="text-[10px] text-gray-400 mb-2">圖例說明</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-1 rounded-full bg-[#B91C1C]"></span>
+              <span className="text-gray-500">大典/新年</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-1 rounded-full bg-[#7c3aed]"></span>
+              <span className="text-gray-500">誕辰</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-1 rounded-full bg-[#0891b2]"></span>
+              <span className="text-gray-500">圓寂紀念</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-1 rounded-full bg-[#f59e0b]"></span>
+              <span className="text-gray-500">初一/十五</span>
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Bottom Navigation */}
-      <div className="bg-[#f8f8f8] border-t border-gray-200 flex justify-around py-2 safe-area-bottom">
+      <div className="bg-white border-t border-gray-200 flex justify-around py-2 safe-area-bottom">
         <button 
           onClick={handleToday}
           className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
         >
-          <span className="text-sm font-medium">Hoy</span>
+          <CalendarIcon size={20} />
+          <span className="text-xs mt-0.5">今天</span>
         </button>
         <button 
           onClick={() => generateICS(currentDate.getFullYear())}
           className="flex flex-col items-center text-[#B91C1C] px-6 py-1"
         >
           <Download size={20} />
-          <span className="text-xs mt-0.5">ICS</span>
+          <span className="text-xs mt-0.5">匯出ICS</span>
         </button>
       </div>
 
       {/* Event Detail Modal */}
       {showEventDetail && selectedDate && selectedEvents.length > 0 && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="bg-white w-full rounded-t-2xl max-h-[70vh] overflow-auto animate-slide-up">
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-end"
+          onClick={() => setShowEventDetail(false)}
+        >
+          <div 
+            className="bg-white w-full rounded-t-2xl max-h-[80vh] overflow-auto animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Handle */}
+            <div className="flex justify-center pt-2 pb-1">
+              <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+            </div>
+            
             {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex justify-between items-center">
-              <div>
-                <div className="text-lg font-bold">
-                  {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日
+            <div className="px-4 py-3 border-b border-gray-100">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {selectedDate.getMonth() + 1}月{selectedDate.getDate()}日
+                  </div>
+                  <div className="text-base text-[#B91C1C] font-medium mt-0.5">
+                    {selectedLunar && `${CHINESE_LUNAR_MONTHS[selectedLunar.month - 1]} ${CHINESE_LUNAR_DAYS[selectedLunar.day]}`}
+                  </div>
+                  <div className="text-sm text-gray-500 mt-0.5">
+                    {SPANISH_MONTHS[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+                  </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                  {selectedLunar && `${CHINESE_LUNAR_MONTHS[selectedLunar.month - 1]} ${CHINESE_LUNAR_DAYS[selectedLunar.day]}`}
-                </div>
+                <button 
+                  onClick={() => setShowEventDetail(false)}
+                  className="p-2 -mr-2 text-gray-400"
+                >
+                  <X size={24} />
+                </button>
               </div>
-              <button 
-                onClick={() => setShowEventDetail(false)}
-                className="text-[#B91C1C] font-medium"
-              >
-                關閉
-              </button>
             </div>
 
             {/* Events List */}
             <div className="p-4 space-y-3">
-              {selectedEvents.map((event, idx) => (
-                <div 
-                  key={idx}
-                  className={`
-                    p-4 rounded-xl border-l-4
-                    ${event.isMajor ? 'bg-red-50 border-[#B91C1C]' : 'bg-gray-50 border-gray-300'}
-                  `}
-                >
-                  <div className={`font-bold ${event.isMajor ? 'text-[#B91C1C]' : 'text-gray-800'}`}>
-                    {event.title}
+              {selectedEvents.map((event, idx) => {
+                let bgColor = 'bg-gray-50';
+                let borderColor = 'border-gray-200';
+                let iconBg = 'bg-gray-100';
+                
+                if (event.type === 'ceremony') {
+                  bgColor = 'bg-red-50';
+                  borderColor = 'border-[#B91C1C]';
+                  iconBg = 'bg-[#B91C1C]';
+                } else if (event.type === 'natalicio') {
+                  bgColor = 'bg-purple-50';
+                  borderColor = 'border-purple-500';
+                  iconBg = 'bg-purple-500';
+                } else if (event.type === 'iluminacion') {
+                  bgColor = 'bg-cyan-50';
+                  borderColor = 'border-cyan-500';
+                  iconBg = 'bg-cyan-500';
+                } else if (event.type === 'moon') {
+                  bgColor = 'bg-amber-50';
+                  borderColor = 'border-amber-500';
+                  iconBg = 'bg-amber-500';
+                }
+                
+                return (
+                  <div 
+                    key={idx}
+                    className={`p-4 rounded-xl border-l-4 ${bgColor} ${borderColor}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-full ${iconBg} flex items-center justify-center text-white text-lg shrink-0`}>
+                        {event.type === 'moon' && (event.title.includes('Nueva') ? '🌑' : '🌕')}
+                        {event.type === 'ceremony' && '🔔'}
+                        {event.type === 'natalicio' && '🙏'}
+                        {event.type === 'iluminacion' && '✨'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-900">
+                          {event.title}
+                        </div>
+                        {event.chinese && (
+                          <div className="text-sm text-gray-600 mt-1">{event.chinese}</div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  {event.chinese && (
-                    <div className="text-sm text-gray-600 mt-1">{event.chinese}</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
+            
+            {/* Safe area padding */}
+            <div className="h-6 safe-area-bottom"></div>
           </div>
         </div>
       )}
