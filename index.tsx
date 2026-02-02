@@ -929,66 +929,70 @@ const MobileCalendar = () => {
             </button>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-auto bg-gray-50">
-            {/* Printable Content */}
-            <div id="mobile-printable-summary" className="bg-white min-h-full">
+          {/* Content - Scrollable container for A4 preview */}
+          <div className="flex-1 overflow-auto bg-gray-200 p-2">
+            {/* Printable Content - Compact A4 Layout matching desktop */}
+            <div id="mobile-printable-summary" className="bg-white mx-auto shadow-lg" style={{ width: '210mm', minHeight: '297mm', padding: '5mm' }}>
               {/* Title */}
-              <div className="bg-[#B91C1C] text-white p-4 text-center">
-                <h1 className="text-xl font-bold">Calendario Ritual del Templo</h1>
-                <p className="text-white/80 text-sm mt-1">{currentDate.getFullYear()}</p>
+              <div className="text-center mb-2 border-b-2 border-[#B91C1C] pb-2">
+                <h1 className="text-xl font-bold text-[#B91C1C] uppercase tracking-wider">Calendario Ritual del Templo {currentDate.getFullYear()}</h1>
               </div>
 
-              {/* Events by Month */}
-              <div className="p-4 space-y-4">
+              {/* 3-Column Grid Layout */}
+              <div className="grid grid-cols-3 gap-3">
                 {Object.entries(yearlyEvents).map(([monthIndex, days]) => (
-                  <div key={monthIndex} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                  <div key={monthIndex} className="break-inside-avoid border border-gray-200 rounded-lg overflow-hidden flex flex-col shadow-sm h-fit">
                     {/* Month Header */}
-                    <div className="bg-[#B91C1C] text-white py-2 px-4 font-bold">
+                    <div className="bg-[#B91C1C] text-white py-1 px-2 font-bold text-center text-xs uppercase tracking-wide">
                       {SPANISH_MONTHS[Number(monthIndex)]}
                     </div>
                     
                     {/* Events */}
-                    <div className="divide-y divide-gray-100">
-                      {(days as Array<{date: Date, lunar: any, events: CalendarEvent[]}>).map((dayItem, dIdx) => (
-                        <div key={dIdx} className="px-4 py-3 flex gap-3">
-                          {/* Date */}
-                          <div className="w-10 text-center shrink-0">
-                            <div className="text-lg font-bold text-gray-800">{dayItem.date.getDate()}</div>
-                            <div className="text-[10px] text-gray-400">{SPANISH_WEEKDAYS[(dayItem.date.getDay() + 6) % 7]}</div>
-                          </div>
-                          
-                          {/* Events */}
-                          <div className="flex-1 space-y-1">
-                            {dayItem.events.map((ev, eIdx) => (
-                              <div key={eIdx} className="flex items-start gap-2">
-                                <span className="text-sm shrink-0">
-                                  {ev.type === 'ceremony' && '🔔'}
-                                  {ev.type === 'moon' && (ev.title.includes('Nueva') ? '🌑' : '🌕')}
-                                  {ev.type === 'natalicio' && '🙏'}
-                                  {ev.type === 'iluminacion' && '✨'}
-                                </span>
-                                <div className="flex-1">
-                                  <p className={`text-sm leading-tight ${ev.isMajor ? 'font-semibold text-[#B91C1C]' : 'text-gray-700'}`}>
-                                    {ev.title}
-                                  </p>
-                                  <p className="text-[10px] text-gray-400 mt-0.5">
-                                    {SPANISH_LUNAR_MONTHS[dayItem.lunar.month - 1]} - {SPANISH_LUNAR_DAYS[dayItem.lunar.day]}
-                                  </p>
+                    <div className="p-1.5 bg-gray-50 flex-1 space-y-1">
+                      {(days as Array<{date: Date, lunar: any, events: CalendarEvent[]}>).map((dayItem, dIdx) => {
+                        const isWeekend = dayItem.date.getDay() === 0 || dayItem.date.getDay() === 6;
+                        
+                        return (
+                          <div key={dIdx} className="flex gap-1.5 text-[9px] border-b border-gray-200 pb-1 last:border-0 last:pb-0 leading-tight">
+                            <div className={`w-4 text-right font-bold shrink-0 ${isWeekend ? 'text-red-600' : 'text-gray-700'}`}>
+                              {dayItem.date.getDate()}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              {dayItem.events.map((ev, eIdx) => (
+                                <div key={eIdx} className="flex flex-col items-start mb-0.5 last:mb-0">
+                                  <div className="flex items-start gap-1 leading-none w-full">
+                                    <span className="shrink-0 text-[9px] w-2.5 text-center">
+                                      {ev.type === 'ceremony' && '🔔'}
+                                      {ev.type === 'moon' && (ev.title.includes('Nueva') ? '🌑' : '🌕')}
+                                      {ev.type === 'natalicio' && '❀'}
+                                      {ev.type === 'iluminacion' && '✨'}
+                                    </span>
+                                    <div className="flex flex-col">
+                                      <span className={`whitespace-normal ${ev.isMajor ? 'font-bold text-[#B91C1C]' : 'text-gray-600'}`}>
+                                        {ev.title}
+                                      </span>
+                                      {ev.chinese && (
+                                        <div className={`text-[8px] transform scale-95 origin-left ${ev.isMajor ? 'text-red-800/80' : 'text-gray-400'}`}>
+                                          {ev.chinese}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
 
               {/* Footer */}
-              <div className="p-4 text-center text-gray-400 text-xs border-t border-gray-100">
-                Calendario Ritual del Templo - {currentDate.getFullYear()}
+              <div className="mt-4 pt-2 border-t border-gray-300 text-center text-gray-400 text-[9px]">
+                Calendario generado por App del Templo
               </div>
             </div>
           </div>
